@@ -1,0 +1,7 @@
+.idea/
+*.bat
+*.sh
+*.iml
+*.ipr
+/target/
+**/*.rs.bk
