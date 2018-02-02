@@ -29,7 +29,7 @@ struct Config {
 }
 
 const DEFAULT_REQ_DELAY: u64 = 1000 * 60 * 30;
-const HELP_TEXT: &str = "__Introducing... **ArrayButt!**__
+const HELP_TEXT: &str = "__Introducing... **Arrayong!**__
 A revolution in philosophy!
 Invoke me with `[]says [date|query]`";
 const MONTHS: [&str; 12] = ["January", "February", "March", "April", "May", "June",
