@@ -1,4 +1,3 @@
-extern crate fst;
 extern crate ordermap;
 extern crate rand;
 extern crate regex;
@@ -6,6 +5,7 @@ extern crate reqwest;
 extern crate serde;
 extern crate serde_json;
 extern crate serenity;
+extern crate sublime_fuzzy;
 extern crate typemap;
 
 use ordermap::OrderMap;
@@ -20,6 +20,7 @@ use std::{ env, fmt };
 use std::error::Error;
 use std::option::Option;
 use std::time::{ Duration, SystemTime, UNIX_EPOCH };
+use sublime_fuzzy::{ best_match };
 
 struct Config {
     url: String,
@@ -190,23 +191,53 @@ fn choose_map_entry<V>(map: &OrderMap<String, V>) -> &V {
     map.get_index(rand::thread_rng().gen_range::<usize>(0, map.len())).unwrap().1
 }
 
+fn flatten<'a>(quotes: &'a OrderMap<String, QuoteYear>, quotes_flat: &mut Vec<Box<&'a Quote>>) {
+    for (_, year) in quotes {
+        for (_, month) in &year.months {
+            for quote in &month.quotes {
+                &quotes_flat.push(Box::new(quote));
+            }
+        }
+    }
+}
+
 fn do_command(cache: &mut QuoteCache, msg: &Message, args: &Option<String>) {
     let cache_size = cache.cache_size;
     if let Result::Ok(quotes) = cache.get_quotes() {
         if let &Option::Some(ref query) = args {
             if !query.is_empty() {
-                // TODO Implement
+                // TODO Implement date-based search
+                let mut best: Option<&Quote> = Option::None;
+                let mut best_score: isize = 0;
+                for (_, year) in quotes {
+                    for (_, month) in &year.months {
+                        for quote in &month.quotes {
+                            if let Option::Some(f_match) = best_match(
+                                &query.to_lowercase(),
+                                &quote.text.to_lowercase()
+                            ) {
+                                if f_match.score() != 0
+                                    && (!best.is_some() || f_match.score() > best_score) {
+                                    best = Option::Some(quote);
+                                    best_score = f_match.score();
+                                }
+                            }
+                        }
+                    }
+                }
+                if let Option::Some(quote) = best {
+                    send_quote(&msg, quote);
+                } else {
+                    if let Result::Err(err) = msg.channel_id.send_message(|m| m
+                        .content(format!("No results found for query `{}`.", query))) {
+                        eprintln!("Failed to send message: {}", err);
+                    }
+                }
                 return;
             }
         }
         let mut quotes_flat: Vec<Box<&Quote>> = Vec::with_capacity(cache_size);
-        for (_, year) in quotes {
-            for (_, month) in &year.months {
-                for quote in &month.quotes {
-                    &quotes_flat.push(Box::new(quote));
-                }
-            }
-        }
+        flatten(quotes, &mut quotes_flat);
         let quote = rand::thread_rng().choose(&quotes_flat);
         send_quote(&msg, &quote.unwrap());
     } else {
